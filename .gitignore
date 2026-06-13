@@ -1,0 +1,25 @@
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.env
+.env.local
+*.log
+
+# Node / React
+node_modules/
+/dist
+/build
+*.local
+.DS_Store
+.vscode/
+.idea/
+
+# Misc
+.DS_Store
+Thumbs.db

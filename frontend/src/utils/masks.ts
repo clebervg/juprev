@@ -1,0 +1,27 @@
+export const masks = {
+  cpf: (v: string) =>
+    v.replace(/\D/g, "").slice(0, 11)
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2"),
+
+  nis: (v: string) =>
+    v.replace(/\D/g, "").slice(0, 11)
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{5})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1})$/, "$1-$2"),
+
+  telefone: (v: string) => {
+    const d = v.replace(/\D/g, "").slice(0, 11);
+    if (d.length <= 10)
+      return d.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2");
+    return d.replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2");
+  },
+
+  cep: (v: string) =>
+    v.replace(/\D/g, "").slice(0, 8).replace(/(\d{5})(\d)/, "$1-$2"),
+
+  rg: (v: string) => v.slice(0, 20),
+
+  onlyNumbers: (v: string) => v.replace(/\D/g, ""),
+};

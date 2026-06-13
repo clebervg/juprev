@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    font-family: "Inter", system-ui, sans-serif;
+  }
+
+  :focus-visible {
+    outline: 2px solid #4f46e5;
+    outline-offset: 2px;
+  }
+
+  /* Transição suave entre temas — respeita prefers-reduced-motion */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+  }
+}
