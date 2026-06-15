@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ─── Tipos compartilhados ────────────────────────────────────────────────────
@@ -36,9 +36,16 @@ class CNISCreate(BaseModel):
     cliente_id: uuid.UUID
     nome_segurado: str = Field(..., min_length=2, max_length=255)
     cpf: str = Field(..., min_length=11, max_length=11)
-    nis: str = Field(..., min_length=11, max_length=11)
+    nis: str | None = Field(None, min_length=11, max_length=11)
     data_nascimento: date
     arquivo_original_nome: str | None = None
+
+    @field_validator("nis", mode="before")
+    @classmethod
+    def empty_nis_to_none(cls, v: object) -> object:
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
 
 class CNISResponse(BaseModel):
@@ -46,15 +53,16 @@ class CNISResponse(BaseModel):
     tenant_id: uuid.UUID
     cliente_id: uuid.UUID
     nome_segurado: str
-    nis: str
+    nis: str | None
     data_nascimento: date
     periodo_inicial_cn: date | None
     periodo_final_cn: date | None
     tempo_contribuicao_total_dias: int | None
-    tempo_contribuicao_anos: Decimal | None
+    tempo_contribuicao_anos: float | None
     total_contribuicoes: int | None
-    maior_salario_contribuicao: Decimal | None
-    media_salarios_contribuicao: Decimal | None
+    maior_salario_contribuicao: float | None
+    media_salarios_contribuicao: float | None
+    media_salarios_contribuicao_corrigida: float | None
     status_processamento: str
     erros_validacao: dict | None
     created_at: datetime
@@ -90,7 +98,7 @@ class PeriodoContribuicaoResponse(BaseModel):
     indicador_aposentadoria_especial: bool
     agente_nocivo: str | None
     grau_deficiencia: str | None
-    total_remuneracoes: Decimal | None
+    total_remuneracoes: float | None
     quantidade_remuneracoes: int | None
     periodo_valido: bool
     motivo_invalidacao: str | None
@@ -105,9 +113,9 @@ class RemuneracaoResponse(BaseModel):
     mes_referencia: date
     ano: int
     mes: int
-    salario_contribuicao: Decimal
-    salario_contribuicao_corrigido: Decimal | None
-    teto_inss: Decimal | None
+    salario_contribuicao: float
+    salario_contribuicao_corrigido: float | None
+    teto_inss: float | None
     contribuiu_inss: bool
     salario_valido: bool
     acima_teto: bool
@@ -136,18 +144,18 @@ class CalculoRMIResponse(BaseModel):
     regra_aplicada: str | None
     data_der: date
     idade_na_der: int
-    tempo_contribuicao_na_der: Decimal
-    salario_beneficio: Decimal
-    coeficiente_calculo: Decimal
-    fator_previdenciario: Decimal | None
-    fator_acumulador: Decimal | None
-    rmi_calculada: Decimal
-    rmi_teto: Decimal | None
-    rmi_final: Decimal
+    tempo_contribuicao_na_der: float
+    salario_beneficio: float
+    coeficiente_calculo: float
+    fator_previdenciario: float | None
+    fator_acumulador: float | None
+    rmi_calculada: float
+    rmi_teto: float | None
+    rmi_final: float
     detalhamento_calculo: dict
     requisitos_atendidos: dict | None
-    rmi_regra_anterior: Decimal | None
-    diferenca_reforma: Decimal | None
+    rmi_regra_anterior: float | None
+    diferenca_reforma: float | None
     calculo_valido: bool
     alertas: list | None
     erros: list | None
@@ -172,13 +180,13 @@ class SimulacaoResponse(BaseModel):
     cnis_id: uuid.UUID
     nome_simulacao: str | None
     data_simulacao_futura: date
-    taxa_crescimento_salario: Decimal | None
-    taxa_inflacao_anual: Decimal | None
+    taxa_crescimento_salario: float | None
+    taxa_inflacao_anual: float | None
     idade_na_data: int | None
-    tempo_contribuicao_projetado: Decimal | None
-    salario_beneficio_projetado: Decimal | None
-    rmi_projetada: Decimal | None
-    rmi_valor_atual: Decimal | None
+    tempo_contribuicao_projetado: float | None
+    salario_beneficio_projetado: float | None
+    rmi_projetada: float | None
+    rmi_valor_atual: float | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -190,7 +198,7 @@ class InconsistenciaItem(BaseModel):
     tipo: str
     descricao: str
     periodo_afetado: str | None = None
-    impacto_financeiro: Decimal | None = None
+    impacto_financeiro: float | None = None
     recomendacao: str | None = None
 
 

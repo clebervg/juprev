@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -156,6 +156,7 @@ function ResultadoCalculo({ calculo }: { calculo: CalculoRMI }) {
 export function CalculoRMIForm() {
   const { cnisId } = useParams<{ cnisId: string }>();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [resultado, setResultado] = useState<CalculoRMI | null>(null);
 
   const { data: cnis } = useQuery({
@@ -195,6 +196,7 @@ export function CalculoRMIForm() {
     },
     onSuccess: (data) => {
       setResultado(data);
+      qc.invalidateQueries({ queryKey: ["cnis", cnisId, "calculos"] });
       toast.success("Cálculo executado com sucesso.");
     },
     onError: (e: { response?: { data?: { detail?: string } } }) => {

@@ -37,6 +37,9 @@ async def criar_cnis(
     db: AsyncSession,
     conteudo_arquivo: bytes | None = None,
 ) -> CNIS:
+    from sqlalchemy import select
+    from app.models.client import Client  # noqa: PLC0415
+
     repo = CNISRepository(db)
 
     if conteudo_arquivo:
@@ -60,6 +63,15 @@ async def criar_cnis(
         arquivo_original_hash=arquivo_hash,
         status_processamento="pendente",
     )
+
+    # Salva NIS no cadastro do cliente se ainda não tiver
+    result = await db.execute(
+        select(Client).where(Client.id == data.cliente_id, Client.tenant_id == tenant_id)
+    )
+    cliente = result.scalar_one_or_none()
+    if cliente and not cliente.nis and data.nis:
+        cliente.nis = data.nis
+
     await db.commit()
     await db.refresh(cnis)
     return cnis

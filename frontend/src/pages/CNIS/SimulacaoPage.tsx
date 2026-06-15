@@ -256,7 +256,11 @@ export function SimulacaoPage() {
                     <XAxis dataKey="data" tick={{ fontSize: 11 }} />
                     <YAxis
                       tick={{ fontSize: 11 }}
-                      tickFormatter={(v: number) => `R$${(v / 1000).toFixed(0)}k`}
+                      tickFormatter={(v: number) =>
+                        v >= 1000
+                          ? `R$ ${(v / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}k`
+                          : BRL(v)
+                      }
                     />
                     <Tooltip
                       formatter={(v) => BRL(Number(v))}

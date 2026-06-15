@@ -341,11 +341,11 @@ export function ClienteForm() {
                 </select>
               </Field>
 
-              <Field label="NIS / PIS / PASEP" error={errors.nis?.message} required>
+              <Field label="NIS / PIS / PASEP" error={errors.nis?.message}>
                 <input
                   {...register("nis")}
                   className={inputCls}
-                  placeholder="000.00000.00-0"
+                  placeholder="000.00000.00-0 (opcional)"
                   onChange={(e) => setValue("nis", masks.nis(e.target.value))}
                   maxLength={14}
                 />
@@ -493,7 +493,7 @@ export function ClienteForm() {
               <SectionTitle>Dados Adicionais</SectionTitle>
 
               <Field label="Renda mensal (R$)">
-                <input {...register("renda_mensal")} type="number" min={0} step={0.01} className={inputCls} placeholder="Ex: 1412.00" />
+                <input {...register("renda_mensal")} type="number" min={0} step={0.01} className={inputCls} placeholder="Ex: 1.412,00" />
               </Field>
 
               <Field label="Possui deficiência?">

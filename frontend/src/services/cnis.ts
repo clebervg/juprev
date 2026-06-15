@@ -24,7 +24,7 @@ export const cnisService = {
     cliente_id: string;
     nome_segurado: string;
     cpf: string;
-    nis: string;
+    nis?: string | null;
     data_nascimento: string;
     arquivo_original_nome?: string;
   }) => api.post<CNIS>("/cnis", data).then((r) => r.data),
@@ -71,4 +71,15 @@ export const cnisService = {
       headers: { "Content-Type": "multipart/form-data" },
     }).then((r) => r.data);
   },
+
+  processarPDF: (cnisId: string, file: File) => {
+    const form = new FormData();
+    form.append("arquivo", file);
+    return api.post<ImportacaoCSVResult>(`/cnis/${cnisId}/processar-pdf`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then((r) => r.data);
+  },
+
+  corrigirRemuneracoes: (cnisId: string) =>
+    api.post<{ ok: boolean }>(`/cnis/${cnisId}/remuneracoes/corrigir`).then((r) => r.data),
 };

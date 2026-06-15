@@ -215,7 +215,7 @@ class ClientResponse(BaseModel):
     uf: str | None
     tipo_residencia: str | None
     # Dados adicionais
-    renda_mensal: Decimal | None
+    renda_mensal: float | None
     possui_deficiencia: bool
     tipo_deficiencia: str | None
     observacoes: str | None

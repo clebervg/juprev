@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Calculator, TrendingUp, AlertTriangle, CheckCircle2,
   XCircle, Calendar, ChevronDown, ChevronUp, Plus, Trash2, Upload,
-  FileCheck2, X, DollarSign, Pencil,
+  FileCheck2, X, DollarSign, Pencil, FileText,
+  ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,12 +34,16 @@ function SummaryCard({ label, value, sub }: { label: string; value: string; sub?
   );
 }
 
-function CalculoCard({ calculo }: { calculo: CalculoRMI }) {
+function CalculoCard({ calculo, onRecalcular, recalculando }: {
+  calculo: CalculoRMI;
+  onRecalcular: (c: CalculoRMI) => void;
+  recalculando: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
       <div className="flex items-start justify-between gap-4 p-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">{calculo.nome_calculo}</p>
             {calculo.calculo_valido ? (
@@ -51,11 +56,24 @@ function CalculoCard({ calculo }: { calculo: CalculoRMI }) {
             {TIPOS_BENEFICIO[calculo.tipo_beneficio]} · DER: {calculo.data_der}
           </p>
         </div>
-        <div className="text-right shrink-0">
-          <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-            {BRL(calculo.rmi_final)}
-          </p>
-          <p className="text-xs text-slate-400">RMI final</p>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-right">
+            <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+              {BRL(calculo.rmi_final)}
+            </p>
+            <p className="text-xs text-slate-400">RMI final</p>
+          </div>
+          <button
+            onClick={() => onRecalcular(calculo)}
+            disabled={recalculando}
+            title="Recalcular com as remunerações atuais"
+            className="p-2 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-40 transition-colors"
+          >
+            {recalculando
+              ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+              : <Calculator size={16} />
+            }
+          </button>
         </div>
       </div>
 
@@ -443,7 +461,14 @@ function ModalImportarCSV({
                   {preview.map((r, i) => (
                     <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
                       <td className="px-3 py-1.5 font-mono text-slate-700 dark:text-slate-300">{r.competencia}</td>
-                      <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{r.salario}</td>
+                      <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300 font-mono">
+                        {(() => {
+                          const n = parseFloat(r.salario.replace(",", "."));
+                          return isNaN(n)
+                            ? r.salario
+                            : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+                        })()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -469,17 +494,75 @@ function ModalImportarCSV({
 }
 
 // ─── Tab Remunerações ─────────────────────────────────────────────────────────
+function ModalConfirmarPDF({ totalExistente, onConfirm, onClose }: {
+  totalExistente: number;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md p-6"
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/40 shrink-0">
+            <AlertTriangle size={20} className="text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+              Substituir remunerações?
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {totalExistente > 0
+                ? `As ${totalExistente} remuneração(ões) cadastradas serão apagadas e substituídas pelos dados do PDF.`
+                : "As remunerações do PDF serão importadas para este CNIS."}
+            </p>
+            <p className="text-sm text-amber-600 dark:text-amber-400 mt-2 font-medium">
+              Esta ação não pode ser desfeita.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end mt-6">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button onClick={onConfirm}>Confirmar e processar</Button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function TabRemuneracoes({ cnisId }: { cnisId: string }) {
   const qc = useQueryClient();
   const [page, setPage] = useState(0);
   const [modalNova, setModalNova] = useState(false);
   const [modalCSV, setModalCSV] = useState(false);
   const [editando, setEditando] = useState<RemuneracaoItem | null>(null);
+  const [pdfPendente, setPdfPendente] = useState<File | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
   const limit = 20;
 
   const { data, isLoading } = useQuery({
     queryKey: ["cnis", cnisId, "remuneracoes", page],
     queryFn: () => cnisService.listarRemuneracoes(cnisId, { skip: page * limit, limit }),
+  });
+
+  const processarPDFMutation = useMutation({
+    mutationFn: (file: File) => cnisService.processarPDF(cnisId, file),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["cnis", cnisId, "remuneracoes"] });
+      qc.invalidateQueries({ queryKey: ["cnis", cnisId] });
+      setPdfPendente(null);
+      const deletadas = res.deletadas ?? 0;
+      toast.success(`PDF processado: ${res.criadas} remuneração(ões) importada(s)${deletadas ? `, ${deletadas} substituída(s)` : ""}.`);
+      if (res.erros.length) toast.warning(`${res.erros.length} competência(s) com erro.`);
+    },
+    onError: () => {
+      setPdfPendente(null);
+      toast.error("Erro ao processar PDF CNIS.");
+    },
   });
 
   const deletarMutation = useMutation({
@@ -490,6 +573,16 @@ function TabRemuneracoes({ cnisId }: { cnisId: string }) {
       toast.success("Remuneração removida.");
     },
     onError: () => toast.error("Erro ao remover."),
+  });
+
+  const corrigirMutation = useMutation({
+    mutationFn: () => cnisService.corrigirRemuneracoes(cnisId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cnis", cnisId, "remuneracoes"] });
+      qc.invalidateQueries({ queryKey: ["cnis", cnisId] });
+      toast.success("Correção monetária INPC aplicada.");
+    },
+    onError: () => toast.error("Erro ao aplicar correção INPC."),
   });
 
   const totalPages = data ? Math.ceil(data.total / limit) : 1;
@@ -506,6 +599,13 @@ function TabRemuneracoes({ cnisId }: { cnisId: string }) {
             onClose={() => setEditando(null)}
           />
         )}
+        {pdfPendente && (
+          <ModalConfirmarPDF
+            totalExistente={data?.total ?? 0}
+            onConfirm={() => { processarPDFMutation.mutate(pdfPendente); setPdfPendente(null); }}
+            onClose={() => { setPdfPendente(null); if (pdfInputRef.current) pdfInputRef.current.value = ""; }}
+          />
+        )}
       </AnimatePresence>
 
       <div className="space-y-4">
@@ -514,6 +614,21 @@ function TabRemuneracoes({ cnisId }: { cnisId: string }) {
             {data ? `${data.total} remuneração(ões) cadastrada(s)` : "Carregando..."}
           </p>
           <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              loading={corrigirMutation.isPending}
+              onClick={() => corrigirMutation.mutate()}
+              title="Recalcular salário corrigido pelo INPC para todas as remunerações"
+            >
+              Atualizar INPC
+            </Button>
+            <Button
+              variant="secondary"
+              loading={processarPDFMutation.isPending}
+              onClick={() => pdfInputRef.current?.click()}
+            >
+              <FileText size={14} /> Processar PDF
+            </Button>
             <Button variant="secondary" onClick={() => setModalCSV(true)}>
               <Upload size={14} /> Importar CSV
             </Button>
@@ -521,6 +636,17 @@ function TabRemuneracoes({ cnisId }: { cnisId: string }) {
               <Plus size={14} /> Nova Remuneração
             </Button>
           </div>
+          {/* Input oculto para seleção do PDF */}
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept=".pdf,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) setPdfPendente(file);
+            }}
+          />
         </div>
 
         {isLoading ? (
@@ -600,17 +726,62 @@ function TabRemuneracoes({ cnisId }: { cnisId: string }) {
         )}
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">
-              Página {page + 1} de {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <Button variant="secondary" disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-                Anterior
-              </Button>
-              <Button variant="secondary" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>
-                Próxima
-              </Button>
+          <div className="flex items-center justify-between gap-4 pt-1">
+            {/* Info */}
+            <p className="text-xs text-slate-400 tabular-nums shrink-0">
+              {page * limit + 1}–{Math.min((page + 1) * limit, data?.total ?? 0)}{" "}
+              <span className="text-slate-300">de</span>{" "}
+              {data?.total ?? 0}
+            </p>
+
+            {/* Controles */}
+            <div className="flex items-center gap-1">
+              {/* Primeiro */}
+              <button
+                disabled={page === 0}
+                onClick={() => setPage(0)}
+                title="Primeira página"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 transition-colors hover:border-indigo-400 hover:text-indigo-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+              >
+                <ChevronsLeft size={14} />
+              </button>
+
+              {/* Anterior */}
+              <button
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+                title="Página anterior"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 transition-colors hover:border-indigo-400 hover:text-indigo-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+              >
+                <ChevronLeft size={14} />
+              </button>
+
+              {/* Página atual */}
+              <span className="flex h-8 min-w-[2.5rem] items-center justify-center rounded-lg bg-indigo-600 px-2.5 text-xs font-semibold text-white tabular-nums shadow-sm">
+                {page + 1}
+                <span className="mx-1 opacity-60">/</span>
+                {totalPages}
+              </span>
+
+              {/* Próxima */}
+              <button
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+                title="Próxima página"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 transition-colors hover:border-indigo-400 hover:text-indigo-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+              >
+                <ChevronRight size={14} />
+              </button>
+
+              {/* Último */}
+              <button
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage(totalPages - 1)}
+                title="Última página"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-400 transition-colors hover:border-indigo-400 hover:text-indigo-600 disabled:pointer-events-none disabled:opacity-30 dark:hover:border-indigo-500 dark:hover:text-indigo-400"
+              >
+                <ChevronsRight size={14} />
+              </button>
             </div>
           </div>
         )}
@@ -635,6 +806,27 @@ export function CNISDetalhes() {
     queryKey: ["cnis", cnisId, "calculos"],
     queryFn: () => cnisService.listarCalculos(cnisId!),
     enabled: !!cnisId && tab === "calculos",
+  });
+
+  const qc = useQueryClient();
+  const [recalculandoId, setRecalculandoId] = useState<string | null>(null);
+
+  const recalcularMutation = useMutation({
+    mutationFn: (c: CalculoRMI) =>
+      cnisService.calcular(
+        c.cnis_id,
+        { cnis_id: c.cnis_id, tipo_beneficio: c.tipo_beneficio, data_der: c.data_der, nome_calculo: c.nome_calculo },
+        { data_nascimento: undefined },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cnis", cnisId, "calculos"] });
+      qc.invalidateQueries({ queryKey: ["cnis", cnisId, "remuneracoes"] });
+      toast.success("Cálculo atualizado com as remunerações atuais.");
+    },
+    onError: (e: { response?: { data?: { detail?: string } } }) => {
+      toast.error(e?.response?.data?.detail ?? "Erro ao recalcular.");
+    },
+    onSettled: () => setRecalculandoId(null),
   });
 
   const { data: inconsistencias } = useQuery({
@@ -705,7 +897,7 @@ export function CNISDetalhes() {
         </div>
 
         {/* Resumo */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <SummaryCard
             label="Tempo de Contribuição"
             value={cnis.tempo_contribuicao_anos != null ? `${Number(cnis.tempo_contribuicao_anos).toFixed(1)} anos` : "—"}
@@ -719,7 +911,12 @@ export function CNISDetalhes() {
           <SummaryCard
             label="Média Salarial"
             value={cnis.media_salarios_contribuicao != null ? BRL(cnis.media_salarios_contribuicao) : "—"}
-            sub="salário médio de contribuição"
+            sub="salário bruto histórico"
+          />
+          <SummaryCard
+            label="Média Corrigida (INPC)"
+            value={cnis.media_salarios_contribuicao_corrigida != null ? BRL(cnis.media_salarios_contribuicao_corrigida) : "—"}
+            sub="atualizado a hoje"
           />
           <SummaryCard
             label="Período"
@@ -812,7 +1009,14 @@ export function CNISDetalhes() {
                     </Button>
                   </Card>
                 ) : (
-                  calculos.map((c) => <CalculoCard key={c.id} calculo={c} />)
+                  calculos.map((c) => (
+                    <CalculoCard
+                      key={c.id}
+                      calculo={c}
+                      recalculando={recalculandoId === c.id && recalcularMutation.isPending}
+                      onRecalcular={(calc) => { setRecalculandoId(calc.id); recalcularMutation.mutate(calc); }}
+                    />
+                  ))
                 )}
               </div>
             )}

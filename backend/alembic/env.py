@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.core.config import settings
 from app.db.base import Base
 from app.models import Client, Dependente, Tenant, User, CNIS, CNISPeriodoContribuicao, CNISRemuneracao, CalculoRMI, SimulacaoCenario, IndiceCorrecao, ProcessoJudicial, MovimentacaoProcessual, PrazoProcessual, AlertaProcessual  # noqa: F401 — registra todos os models
+from app.models.salario_minimo import SalarioMinimo  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

@@ -32,7 +32,7 @@ export const TIPOS_BENEFICIO: Record<TipoBeneficio, string> = {
 export interface CNISListItem {
   id: string;
   cliente_id: string;
-  nis: string;
+  nis: string | null;
   periodo_inicial_cn: string | null;
   periodo_final_cn: string | null;
   tempo_contribuicao_anos: number | null;
@@ -69,7 +69,7 @@ export interface CNIS {
   id: string;
   tenant_id: string;
   cliente_id: string;
-  nis: string;
+  nis: string | null;
   data_nascimento: string;
   periodo_inicial_cn: string | null;
   periodo_final_cn: string | null;
@@ -78,6 +78,7 @@ export interface CNIS {
   total_contribuicoes: number | null;
   maior_salario_contribuicao: number | null;
   media_salarios_contribuicao: number | null;
+  media_salarios_contribuicao_corrigida: number | null;
   status_processamento: StatusProcessamento;
   erros_validacao: Record<string, unknown> | null;
   created_at: string;
@@ -221,6 +222,7 @@ export interface RemuneracaoCreateRequest {
 
 export interface ImportacaoCSVResult {
   criadas: number;
-  ignoradas: number;
+  ignoradas?: number;
+  deletadas?: number;
   erros: string[];
 }

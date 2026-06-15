@@ -33,7 +33,7 @@ class CNIS(Base):
     # LGPD: nome e CPF são dados sensíveis — nunca logar.
     nome_segurado: Mapped[str] = mapped_column(String(255), nullable=False)
     cpf: Mapped[str] = mapped_column(String(11), nullable=False)
-    nis: Mapped[str] = mapped_column(String(11), nullable=False)
+    nis: Mapped[str | None] = mapped_column(String(11), nullable=True)
     data_nascimento: Mapped[Date] = mapped_column(Date, nullable=False)
 
     arquivo_original_nome: Mapped[str | None] = mapped_column(String(255))
@@ -47,6 +47,7 @@ class CNIS(Base):
     total_contribuicoes: Mapped[int | None] = mapped_column(Integer)
     maior_salario_contribuicao: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
     media_salarios_contribuicao: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
+    media_salarios_contribuicao_corrigida: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))
 
     status_processamento: Mapped[str] = mapped_column(
         Enum("pendente", "processando", "concluido", "erro", name="cnis_status_enum"),

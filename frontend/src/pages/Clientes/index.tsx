@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { UserPlus, Search, Eye, Trash2, Users } from "lucide-react";
+import {
+  UserPlus, Search, Eye, Trash2, Users,
+  ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
+} from "lucide-react";
 import { toast } from "sonner";
 import { clientsService } from "@/services/clients";
 import { PageTransition } from "@/components/ui/PageTransition";
@@ -11,33 +14,59 @@ import { Card } from "@/components/ui/Card";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import type { ClientListItem } from "@/types/client";
 
+const LIMIT = 20;
+
 export function ClientesPage() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState("");
+  const qc = useQueryClient();
   const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["clients", search],
-    queryFn: () => clientsService.list({ search: search || undefined }),
+  // Debounce: reseta para página 0 e dispara query 350ms após parar de digitar
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(0);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ["clients", search, page],
+    queryFn: () => clientsService.list({ skip: page * LIMIT, limit: LIMIT, search: search || undefined }),
+    placeholderData: (prev) => prev,
   });
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSearch(searchInput);
-  };
+  // Pré-carrega a próxima página
+  useEffect(() => {
+    if (!data) return;
+    const totalPages = Math.ceil(data.total / LIMIT);
+    if (page + 1 < totalPages) {
+      qc.prefetchQuery({
+        queryKey: ["clients", search, page + 1],
+        queryFn: () => clientsService.list({ skip: (page + 1) * LIMIT, limit: LIMIT, search: search || undefined }),
+      });
+    }
+  }, [data, page, search, qc]);
 
   const handleDelete = async (id: string, nome: string) => {
     if (!confirm(`Deseja excluir o cliente "${nome}"? Esta ação não pode ser desfeita.`)) return;
     try {
       await clientsService.delete(id);
       toast.success("Cliente excluído com sucesso.");
+      qc.invalidateQueries({ queryKey: ["clients"] });
     } catch {
       toast.error("Erro ao excluir cliente.");
     }
   };
 
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString("pt-BR");
+  const formatDate = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
+
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
+  const from = total === 0 ? 0 : page * LIMIT + 1;
+  const to = Math.min((page + 1) * LIMIT, total);
 
   return (
     <PageTransition>
@@ -49,7 +78,9 @@ export function ClientesPage() {
               Clientes
             </h1>
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-              {data ? `${data.total} cliente${data.total !== 1 ? "s" : ""} cadastrado${data.total !== 1 ? "s" : ""}` : "Carregando..."}
+              {data
+                ? `${total} cliente${total !== 1 ? "s" : ""} cadastrado${total !== 1 ? "s" : ""}`
+                : "Carregando..."}
             </p>
           </div>
           <Button onClick={() => navigate("/clientes/novo")}>
@@ -58,26 +89,24 @@ export function ClientesPage() {
           </Button>
         </div>
 
-        {/* Search */}
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nome..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
-          <Button type="submit" variant="secondary" size="md">
-            Buscar
-          </Button>
-        </form>
+        {/* Busca */}
+        <div className="relative max-w-sm">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Buscar por nome ou CPF..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          />
+          {isFetching && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
+          )}
+        </div>
 
         {/* Tabela */}
         {isLoading ? (
-          <SkeletonTable rows={6} />
+          <SkeletonTable rows={LIMIT} />
         ) : data?.items.length === 0 ? (
           <Card className="py-20 flex flex-col items-center text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-700 mb-4">
@@ -163,6 +192,52 @@ export function ClientesPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between gap-4 px-6 py-3 border-t border-slate-100 dark:border-slate-700">
+                <p className="text-xs text-slate-400 tabular-nums shrink-0">
+                  {from}–{to} de {total}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage(0)}
+                    disabled={page === 0}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Primeira página"
+                  >
+                    <ChevronsLeft size={15} />
+                  </button>
+                  <button
+                    onClick={() => setPage((p) => p - 1)}
+                    disabled={page === 0}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Página anterior"
+                  >
+                    <ChevronLeft size={15} />
+                  </button>
+                  <span className="flex h-8 min-w-[2.5rem] items-center justify-center rounded-lg bg-indigo-600 px-2.5 text-xs font-semibold text-white tabular-nums">
+                    {page + 1}<span className="mx-1 opacity-60">/</span>{totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage((p) => p + 1)}
+                    disabled={page >= totalPages - 1}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Próxima página"
+                  >
+                    <ChevronRight size={15} />
+                  </button>
+                  <button
+                    onClick={() => setPage(totalPages - 1)}
+                    disabled={page >= totalPages - 1}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Última página"
+                  >
+                    <ChevronsRight size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
           </Card>
         )}
       </div>

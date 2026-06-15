@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import io
+import logging
 import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -354,3 +359,107 @@ async def importar_remuneracoes_csv(
         linhas=linhas_processadas,
     )
     return {"criadas": resultado["criadas"], "ignoradas": resultado["ignoradas"], "erros": resultado["erros"]}
+
+
+@router.post(
+    "/{cnis_id}/remuneracoes/corrigir",
+    status_code=status.HTTP_200_OK,
+    summary="Aplica correção monetária INPC em todas as remunerações do CNIS",
+)
+async def corrigir_remuneracoes_cnis(
+    cnis_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    cnis = await cnis_service.obter_cnis(cnis_id, current_user.tenant_id, db)
+    await remuneracoes_service.corrigir_todas_remuneracoes(cnis_id=cnis.id, db=db)
+    return {"ok": True}
+
+
+@router.post(
+    "/{cnis_id}/processar-pdf",
+    status_code=status.HTTP_200_OK,
+    summary="Processa extrato CNIS em PDF e importa remunerações",
+)
+async def processar_pdf_cnis(
+    cnis_id: uuid.UUID,
+    arquivo: UploadFile,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> dict:
+    """
+    Recebe um arquivo PDF do extrato CNIS emitido pelo INSS, extrai as
+    competências e salários de contribuição e os persiste como remunerações.
+
+    Suporta vínculos normais (empregado/servidor) e tabelas consolidadas
+    por ano civil (cooperativa). Duplicatas são ignoradas silenciosamente.
+
+    Retorna resumo com ``criadas``, ``ignoradas`` e ``erros``.
+    """
+    if arquivo.content_type not in (
+        "application/pdf",
+        "application/octet-stream",
+        "binary/octet-stream",
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Formato de arquivo não suportado. Envie um arquivo PDF.",
+        )
+
+    conteudo_bytes = await arquivo.read()
+
+    try:
+        from app.services.pdf_cnis_parser import parse_pdf_cnis  # noqa: PLC0415
+        competencias = parse_pdf_cnis(conteudo_bytes)
+    except ImportError as exc:
+        logger.error("pdfplumber não instalado: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Parser de PDF não disponível no servidor. Contate o suporte.",
+        ) from exc
+    except ValueError as exc:
+        logger.warning("Erro ao parsear PDF CNIS para cnis_id=%s: %s", cnis_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Não foi possível extrair dados do PDF: {exc}",
+        ) from exc
+
+    # Apaga tudo e reimporta (o PDF é a fonte de verdade)
+    deletadas = await remuneracoes_service.deletar_todas_remuneracoes(
+        cnis_id=cnis_id,
+        tenant_id=current_user.tenant_id,
+        db=db,
+    )
+
+    criadas: int = 0
+    erros: list[str] = []
+
+    for competencia, salario in competencias:
+        try:
+            await remuneracoes_service.criar_remuneracao(
+                cnis_id=cnis_id,
+                tenant_id=current_user.tenant_id,
+                db=db,
+                competencia=competencia,
+                salario=salario,
+                tipo="salario",
+                contribuiu_inss=True,
+                _aplicar_correcao=False,  # corrige em lote abaixo
+            )
+            criadas += 1
+        except Exception as exc:  # noqa: BLE001
+            competencia_fmt = f"{competencia.month:02d}/{competencia.year}"
+            logger.warning(
+                "Erro ao salvar competência %s do cnis_id=%s: %s",
+                competencia_fmt, cnis_id, exc,
+            )
+            erros.append(f"{competencia_fmt}: {exc}")
+
+    # Aplica correção monetária em lote (1 query para todos os fatores INPC)
+    await remuneracoes_service.corrigir_todas_remuneracoes(cnis_id=cnis_id, db=db)
+
+    logger.info(
+        "PDF CNIS processado para cnis_id=%s: %d deletadas, %d criadas, %d erros.",
+        cnis_id, deletadas, criadas, len(erros),
+    )
+    return {"deletadas": deletadas, "criadas": criadas, "erros": erros}
