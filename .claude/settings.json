@@ -32,7 +32,14 @@
       "Bash(python -m alembic revision --autogenerate -m \"add_media_corrigida_cnis\")",
       "Bash(/opt/homebrew/bin/node node_modules/.bin/tsc --noEmit)",
       "Bash(sqlite3 /Users/cleber/projects/juprev/backend/juprev.db \"SELECT COUNT\\(*\\) FROM clients WHERE tenant_id = 'a330ca4ea57245b9a20ef1b9bda94034';\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s http://localhost:8000/api/v1/health)",
+      "Bash(/Users/cleber/projects/juprev/env_312/bin/pip install *)",
+      "Bash(EMAIL_A=\"clebervg@gmail.com\" SENHA_A=\"\" /Users/cleber/projects/juprev/env_312/bin/python security_tests.py)",
+      "Bash(curl -s http://localhost:8000/docs)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/docs)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/redoc)",
+      "Bash(python3 security_tests.py)"
     ],
     "additionalDirectories": [
       "/Users/cleber/projects/juprev"

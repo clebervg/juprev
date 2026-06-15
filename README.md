@@ -114,6 +114,13 @@ nvm use 22
 cd frontend && npm run dev
 ```
 
+
+## Testes
+```bash
+EMAIL_A=clebervg@gmail.com SENHA_A=SuaSenhaAqui \
+EMAIL_B=outro@tenant.com  SENHA_B=OutraSenha \
+python security_tests.py
+```
 ---
 
 ## Estrutura do projeto

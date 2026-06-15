@@ -330,7 +330,13 @@ async def importar_remuneracoes_csv(
             detail="Formato de arquivo não suportado. Envie um arquivo CSV.",
         )
 
-    conteudo_bytes = await arquivo.read()
+    _MAX_CSV = 5 * 1024 * 1024  # 5 MB
+    conteudo_bytes = await arquivo.read(_MAX_CSV + 1)
+    if len(conteudo_bytes) > _MAX_CSV:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Arquivo excede o tamanho máximo permitido de 5 MB.",
+        )
     try:
         conteudo_texto = conteudo_bytes.decode("utf-8")
     except UnicodeDecodeError:
@@ -406,7 +412,20 @@ async def processar_pdf_cnis(
             detail="Formato de arquivo não suportado. Envie um arquivo PDF.",
         )
 
-    conteudo_bytes = await arquivo.read()
+    _MAX_PDF = 20 * 1024 * 1024  # 20 MB
+    conteudo_bytes = await arquivo.read(_MAX_PDF + 1)
+    if len(conteudo_bytes) > _MAX_PDF:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Arquivo excede o tamanho máximo permitido de 20 MB.",
+        )
+
+    # Valida assinatura magic do PDF (primeiros 4 bytes devem ser %PDF).
+    if not conteudo_bytes.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Formato de arquivo não suportado. Envie um arquivo PDF.",
+        )
 
     try:
         from app.services.pdf_cnis_parser import parse_pdf_cnis  # noqa: PLC0415
@@ -421,7 +440,7 @@ async def processar_pdf_cnis(
         logger.warning("Erro ao parsear PDF CNIS para cnis_id=%s: %s", cnis_id, exc)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Não foi possível extrair dados do PDF: {exc}",
+            detail="Não foi possível extrair dados do PDF. Verifique se o arquivo é um extrato CNIS válido.",
         ) from exc
 
     # Apaga tudo e reimporta (o PDF é a fonte de verdade)
@@ -453,7 +472,7 @@ async def processar_pdf_cnis(
                 "Erro ao salvar competência %s do cnis_id=%s: %s",
                 competencia_fmt, cnis_id, exc,
             )
-            erros.append(f"{competencia_fmt}: {exc}")
+            erros.append(f"{competencia_fmt}: erro ao processar competência.")
 
     # Aplica correção monetária em lote (1 query para todos os fatores INPC)
     await remuneracoes_service.corrigir_todas_remuneracoes(cnis_id=cnis_id, db=db)

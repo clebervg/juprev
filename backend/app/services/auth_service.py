@@ -4,12 +4,17 @@ from app.core.logging import get_logger
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    hash_password,
     verify_password,
 )
+from app.repositories.refresh_token_repository import RefreshTokenRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import TokenResponse
 
 logger = get_logger(__name__)
+
+# Gerado na inicialização do módulo para evitar hash hardcoded.
+_DUMMY_HASH: str = hash_password("__dummy_sentinel_that_never_matches__")
 
 # LGPD: mensagem de erro genérica — não revela se o email existe ou não.
 _INVALID_CREDENTIALS = "Credenciais inválidas."
@@ -24,8 +29,7 @@ async def authenticate_user(
     user = await repo.get_by_email(email)
 
     # Verifica hash mesmo quando user não existe para evitar timing attack.
-    dummy_hash = "$2b$12$KIXtPbzjlwVuFtxlmRfxuOeB5P5n5E3v3q1yKq6h7y8j9z0a1b2c3"
-    password_ok = verify_password(password, user.hashed_password if user else dummy_hash)
+    password_ok = verify_password(password, user.hashed_password if user else _DUMMY_HASH)
 
     if not user or not password_ok or not user.is_active:
         # LGPD: log sem email para não vazar dado pessoal.
@@ -36,8 +40,11 @@ async def authenticate_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    refresh_token_str, jti, expires_at = create_refresh_token(user.id, user.tenant_id)
+    await RefreshTokenRepository(db).create(jti=jti, user_id=user.id, expires_at=expires_at)
+
     logger.info("Login bem-sucedido. user_id=%s tenant_id=%s", user.id, user.tenant_id)
     return TokenResponse(
         access_token=create_access_token(user.id, user.tenant_id),
-        refresh_token=create_refresh_token(user.id, user.tenant_id),
+        refresh_token=refresh_token_str,
     )
